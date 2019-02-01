@@ -1,0 +1,29 @@
+{
+  "name": "fuzeworks/mvcr",
+  "description": "FuzeWorks Framework MVC Component",
+  "license": ["MIT"],
+  "authors": [
+    {
+      "name": "TechFuze",
+      "homepage": "https://techfuze.net"
+    },
+    {
+      "name": "FuzeWorks Community",
+      "homepage": "https://techfuze.net/fuzeworks/contributors"
+    }
+  ],
+  "require": {
+    "php": ">=7.1.0"
+  },
+  "require-dev": {
+    "fuzeworks/core": "dev-development",
+    "phpunit/phpunit": "^7",
+    "mikey179/vfsStream": "1.6.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "FuzeWorks\\": "src/FuzeWorks/"
+    }
+  }
+
+}

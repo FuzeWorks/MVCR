@@ -35,7 +35,24 @@
  */
 
 /**
- * @todo Add documentation
+ * A route consists of two parts: a 'routeString' and 'routeConfig'. The routeString will be matched against the provided path.
+ *
+ * Possible values:
+ *	Default callable: Adds a route that changes the URL structure. Sends all matches to the defaultCallable router
+ * 	'routingString'
+ *
+ * 	Custom callable: Adds a route that sends all matches to the provided callable. Allows user to replace defaultCallable
+ *	'routingString' => array('callable' => array(CALLABLE))
+ *
+ * 	Dynamic rewrite: Adds a route that rewrites an URL to a specific controller and method configuration, using a callable. The callable can dynamically determine which page to load.
+ * 	'routingString' => CALLABLE
+ *
+ * 	Static rewrite: Adds a route that rewrites and URL to a specific controller and method using a fixed route. This allows for pre-determined rewrites of pages.
+ * 	'routingString' => ['viewType' => 'someType', 'viewName' => 'someName', 'viewMethod' => 'someMethod', 'viewParameters' => 'someParameters']
+ *
+ * 	Example routingString: '/^(?P<viewName>.*?)(|\/(?P<viewMethod>.*?)(|\/(?P<viewParameters>.*?)))(|\.(?P<viewType>.*?))$/'
+ *  A routeString has to contain viewName, viewMethod, viewParameters and viewType in order to be processed by defaultCallable.
  */
+
 return array(
 );

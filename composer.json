@@ -16,9 +16,9 @@
     "php": ">=7.1.0"
   },
   "require-dev": {
-    "fuzeworks/core": "dev-development",
+    "fuzeworks/core": "1.2.0-RC2",
     "phpunit/phpunit": "^7",
-    "mikey179/vfsStream": "1.6.5"
+    "mikey179/vfsstream": "1.6.5"
   },
   "autoload": {
     "psr-4": {

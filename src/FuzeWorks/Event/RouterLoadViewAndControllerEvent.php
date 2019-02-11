@@ -43,7 +43,7 @@ use FuzeWorks\Event;
  *
  * Use this to cancel the loading of a combination, or change the details of what is loaded.
  *
- * Currently only used by OldRouter::defaultCallable();
+ * Currently only used by Router::defaultCallable();
  *
  * @author    Abel Hoogeveen <abel@techfuze.net>
  * @copyright Copyright (c) 2013 - 2019, TechFuze. (http://techfuze.net)

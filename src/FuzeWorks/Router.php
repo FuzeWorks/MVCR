@@ -36,7 +36,6 @@
 
 namespace FuzeWorks;
 
-
 use FuzeWorks\Event\RouterLoadViewAndControllerEvent;
 use FuzeWorks\Exception\ConfigException;
 use FuzeWorks\Exception\ControllerException;
@@ -204,6 +203,7 @@ class Router
             $this->route = $route;
 
             // Call callable if routeConfig is callable, so routeConfig can be replaced
+            // This is an example of 'Dynamic Rewrite'
             // e.g: '.*$' => callable
             if (is_callable($routeConfig))
                 $routeConfig = call_user_func_array($routeConfig, [$matches]);
@@ -212,17 +212,20 @@ class Router
             if (is_array($routeConfig))
             {
                 // Replace defaultCallable if a custom callable is provided
+                // This is an example of 'Custom Callable'
                 // e.g: '.*$' => ['callable' => [$object, 'method']]
                 if (isset($routeConfig['callable']) && is_callable($routeConfig['callable']))
                     $this->callable = $routeConfig['callable'];
 
                 // If the route provides a configuration, use that
+                // This is an example of 'Static Rewrite'
                 // e.g: '.*$' => ['viewName' => 'custom', 'viewType' => 'cli', 'function' => 'index']
                 else
                     $this->matches = array_merge($this->matches, $routeConfig);
             }
 
             // If no custom callable is provided, use default
+            // This is an example of 'Default Callable'
             if (is_null($this->callable))
                 $this->callable = [$this, 'defaultCallable'];
 
@@ -237,7 +240,7 @@ class Router
             return $output;
         }
 
-        throw new NotFoundException("Could not load view. Router could not find matching route.");
+        throw new NotFoundException("Could not load view. Router could not find matching route with satisfied callable.");
     }
 
     /**
@@ -273,14 +276,10 @@ class Router
         Logger::log('defaultCallable called');
 
         // Prepare variables
-        $viewName = isset($matches['viewName']) ? $matches['viewName'] : null;
-        $viewType = isset($matches['viewType']) ? $matches['viewType'] : $this->config->routing->default_viewType;
-        $viewMethod = isset($matches['viewMethod']) ? $matches['viewMethod'] : $this->config->routing->default_viewMethod;
-        $viewParameters = isset($matches['viewParameters']) ? $matches['viewParameters'] : '';
-
-        // If nothing is provided, cancel loading
-        if (is_null($viewName))
-            return false;
+        $viewName = !empty($matches['viewName']) ? $matches['viewName'] : $this->config->routing->default_view;
+        $viewType = !empty($matches['viewType']) ? $matches['viewType'] : $this->config->routing->default_viewType;
+        $viewMethod = !empty($matches['viewMethod']) ? $matches['viewMethod'] : $this->config->routing->default_viewMethod;
+        $viewParameters = !empty($matches['viewParameters']) ? $matches['viewParameters'] : '';
 
         try {
             /** @var RouterLoadViewAndControllerEvent $event */
@@ -305,6 +304,7 @@ class Router
         } catch (ControllerException $e) {
             throw new RouterException("Could not load view. Controllers::get threw ControllerException: '".$e->getMessage()."'");
         } catch (NotFoundException $e) {
+            Logger::logError("Could not load view. Controller does not exist.");
             return false;
         }
 
@@ -314,6 +314,7 @@ class Router
         } catch (ViewException $e) {
             throw new RouterException("Could not load view. Views::get threw ViewException: '".$e->getMessage()."'");
         } catch (NotFoundException $e) {
+            Logger::logError("Could not load view. View does not exist.");
             return false;
         }
 
@@ -324,19 +325,12 @@ class Router
         // Check if requested function or magic method exists in view
         if (method_exists($this->view, $event->viewMethod) || method_exists($this->view, '__call'))
         {
-            // Run viewCallMethodEvent.
-            try {
-                $methodEvent = Events::fireEvent('viewCallMethodEvent');
-            } catch (EventException $e) {
-                throw new RouterException("Could not load view. viewCallMethodEvent threw exception: '".$e->getMessage()."'");
-            }
-
-            // If cancelled, halt
-            if ($methodEvent->isCancelled())
-                throw new HaltException("Will not load view. Cancelled by viewCallMethodEvent");
-
             // Execute the function on the view
             return $this->view->{$event->viewMethod}($event->viewParameters);
+        }
+        else
+        {
+            Logger::logError("Could not load view. View does not have method '".$event->viewMethod."'");
         }
 
         // View could not be found

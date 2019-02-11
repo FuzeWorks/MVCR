@@ -189,6 +189,7 @@ class Router
      * @return mixed
      * @throws NotFoundException
      * @throws RouterException
+     * @throws HaltException
      */
     public function route(string $path)
     {
@@ -251,6 +252,7 @@ class Router
      * @param string $route
      * @return mixed
      * @throws RouterException
+     * @throws HaltException
      */
     protected function loadCallable(callable $callable, array $matches, string $route)
     {
@@ -271,6 +273,10 @@ class Router
         } catch (EventException $e) {
             throw new RouterException("Could not load callable. routerLoadCallableEvent threw exception: '".$e->getMessage()."'");
         }
+
+        // Halt if cancelled
+        if ($event->isCancelled())
+            throw new HaltException("Will not load callable. Cancelled by routerLoadCallableEvent.");
 
         // Invoke callable
         $output = call_user_func_array($event->callable, [$event->matches, $event->route]);

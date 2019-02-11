@@ -39,11 +39,52 @@ namespace FuzeWorks;
 /**
  * Abstract class Controller.
  *
- * Extends all controllers to use the Factory.
+ * Extends all controllers to use useful classes
  *
  * @author    Abel Hoogeveen <abel@techfuze.net>
  * @copyright Copyright (c) 2013 - 2019, TechFuze. (http://techfuze.net)
  */
-abstract class Controller extends Factory
+abstract class Controller
 {
+    /**
+     * @var Plugins
+     */
+    public $plugins;
+
+    /**
+     * @var Libraries
+     */
+    public $libraries;
+
+    /**
+     * @var Helpers
+     */
+    public $helpers;
+
+    /**
+     * @var Config
+     */
+    public $config;
+
+    /**
+     * @var Controllers
+     */
+    public $controllers;
+
+    /**
+     * @var Models
+     */
+    public $models;
+
+    public function __construct()
+    {
+        $this->plugins = Factory::getInstance()->plugins;
+        $this->libraries = Factory::getInstance()->libraries;
+        $this->helpers = Factory::getInstance()->helpers;
+        $this->config = Factory::getInstance()->config;
+        $this->controllers = Factory::getInstance()->controllers;
+        $this->models = Factory::getInstance()->models;
+    }
+
+
 }

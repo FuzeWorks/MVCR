@@ -36,6 +36,7 @@
 
 namespace FuzeWorks;
 
+use FuzeWorks\Event\RouterLoadCallableEvent;
 use FuzeWorks\Event\RouterLoadViewAndControllerEvent;
 use FuzeWorks\Exception\ConfigException;
 use FuzeWorks\Exception\ControllerException;
@@ -187,6 +188,7 @@ class Router
      * @param string $path
      * @return mixed
      * @throws NotFoundException
+     * @throws RouterException
      */
     public function route(string $path)
     {
@@ -248,6 +250,7 @@ class Router
      * @param array $matches
      * @param string $route
      * @return mixed
+     * @throws RouterException
      */
     protected function loadCallable(callable $callable, array $matches, string $route)
     {
@@ -257,10 +260,22 @@ class Router
             if (!is_int($key))
                 Logger::log($key.': '.var_export($value, true).'');
         }
-        Logger::stopLevel();
+
+        try {
+            /** @var RouterLoadCallableEvent $event */
+            $event = Events::fireEvent('routerLoadCallableEvent',
+                $callable,
+                $matches,
+                $route
+            );
+        } catch (EventException $e) {
+            throw new RouterException("Could not load callable. routerLoadCallableEvent threw exception: '".$e->getMessage()."'");
+        }
 
         // Invoke callable
-        return call_user_func_array($callable, [$matches, $route]);
+        $output = call_user_func_array($event->callable, [$event->matches, $event->route]);
+        Logger::stopLevel();
+        return $output;
     }
 
     /**

@@ -50,22 +50,22 @@ abstract class Model
     /**
      * @var Plugins
      */
-    public $plugins;
+    protected $plugins;
 
     /**
      * @var Libraries
      */
-    public $libraries;
+    protected $libraries;
 
     /**
      * @var Helpers
      */
-    public $helpers;
+    protected $helpers;
 
     /**
      * @var Config
      */
-    public $config;
+    protected $config;
 
     public function __construct()
     {

@@ -51,22 +51,22 @@ abstract class View
     /**
      * @var Plugins
      */
-    public $plugins;
+    protected $plugins;
 
     /**
      * @var Libraries
      */
-    public $libraries;
+    protected $libraries;
 
     /**
      * @var Helpers
      */
-    public $helpers;
+    protected $helpers;
 
     /**
      * @var Config
      */
-    public $config;
+    protected $config;
 
     /**
      * The controller associated with this view

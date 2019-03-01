@@ -49,32 +49,32 @@ abstract class Controller
     /**
      * @var Plugins
      */
-    public $plugins;
+    protected $plugins;
 
     /**
      * @var Libraries
      */
-    public $libraries;
+    protected $libraries;
 
     /**
      * @var Helpers
      */
-    public $helpers;
+    protected $helpers;
 
     /**
      * @var Config
      */
-    public $config;
+    protected $config;
 
     /**
      * @var Controllers
      */
-    public $controllers;
+    protected $controllers;
 
     /**
      * @var Models
      */
-    public $models;
+    protected $models;
 
     public function __construct()
     {

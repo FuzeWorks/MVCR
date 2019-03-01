@@ -13,10 +13,10 @@
     }
   ],
   "require": {
-    "php": ">=7.1.0"
+    "php": ">=7.1.0",
+    "fuzeworks/core": "1.2.0-RC2"
   },
   "require-dev": {
-    "fuzeworks/core": "1.2.0-RC2",
     "phpunit/phpunit": "^7",
     "mikey179/vfsstream": "1.6.5"
   },

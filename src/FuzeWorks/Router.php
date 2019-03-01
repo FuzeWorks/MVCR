@@ -36,6 +36,7 @@
 
 namespace FuzeWorks;
 
+use FuzeWorks\Event\RouterCallViewEvent;
 use FuzeWorks\Event\RouterLoadCallableEvent;
 use FuzeWorks\Event\RouterLoadViewAndControllerEvent;
 use FuzeWorks\Exception\ConfigException;
@@ -339,6 +340,28 @@ class Router
             return false;
         }
 
+        // Fire routerCallViewEvent
+        try {
+            /** @var RouterCallViewEvent $event */
+            $event = Events::fireEvent('routerCallViewEvent',
+                $this->view,
+                $this->controller,
+                $event->viewMethod,
+                $event->viewParameters,
+                $event->route
+            );
+
+            // Reset vars
+            $this->view = $event->view;
+            $this->controller = $event->controller;
+        } catch (EventException $e) {
+            throw new RouterException("Could not load view. routerCallViewEvent threw exception: '".$e->getMessage()."'");
+        }
+
+        // Cancel if requested to do so
+        if ($event->isCancelled())
+            throw new HaltException("Will not load view. Cancelled by routerCallViewEvent");
+
         // If the view does not want a function to be loaded, provide a halt parameter
         if (isset($this->view->halt))
             throw new HaltException("Will not load view. Cancelled by 'halt' attribute in view.");
@@ -347,7 +370,10 @@ class Router
         if (method_exists($this->view, $event->viewMethod) || method_exists($this->view, '__call'))
         {
             // Execute the function on the view
-            return $this->view->{$event->viewMethod}($event->viewParameters);
+            Logger::newLevel("Calling method '{$event->viewMethod}' on " . get_class($this->view) . ' with ' . get_class($this->controller));
+            $output = $this->view->{$event->viewMethod}($event->viewParameters);
+            Logger::stopLevel();
+            return $output;
         }
         else
         {

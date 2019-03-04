@@ -156,7 +156,14 @@ class Router
         }
     }
 
-    public function addRoute(string $route, $routeConfig = null, bool $prepend = true)
+    /**
+     * Add a route to the Router
+     *
+     * @param string $route
+     * @param null $routeConfig
+     * @param int $priority
+     */
+    public function addRoute(string $route, $routeConfig = null, int $priority = Priority::NORMAL)
     {
         // Set defaultCallable if no value provided
         if (is_null($routeConfig))
@@ -165,23 +172,27 @@ class Router
         // Convert wildcards to Regex
         $route = str_replace([':any',':num'], ['[^/]+', '[0-9]+'], $route);
 
-        if ($prepend)
-            $this->routes = [$route => $routeConfig] + $this->routes;
-        else
-            $this->routes[$route] = $routeConfig;
+        if (!isset($this->routes[$priority]))
+            $this->routes[$priority] = [];
 
-        Logger::log('Route added at '.($prepend ? 'top' : 'bottom').': "'.$route.'"');
+        if (!isset($this->routes[$priority][$route]))
+            $this->routes[$priority][$route] = $routeConfig;
+
+        Logger::log('Route added with ' . Priority::getPriority($priority) . ": '" . $route."'");
     }
 
     /**
      * Removes a route from the array based on the given route.
      *
      * @param $route string The route to remove
+     * @param int $priority
      */
-    public function removeRoute(string $route)
+    public function removeRoute(string $route, int $priority = Priority::NORMAL)
     {
-        unset($this->routes[$route]);
+        if (!isset($this->routes[$priority][$route]))
+            return;
 
+        unset($this->routes[$priority][$route]);
         Logger::log('Route removed: '.$route);
     }
 
@@ -194,54 +205,60 @@ class Router
      */
     public function route(string $path)
     {
-        // Check all the provided custom paths
-        foreach ($this->routes as $route => $routeConfig)
-        {
-            // Match the path against the routes
-            if (!preg_match('#^'.$route.'$#', $path, $matches))
+        // Check all the provided custom paths, ordered by priority
+        for ($i=Priority::getHighestPriority(); $i<=Priority::getLowestPriority(); $i++) {
+            if (!isset($this->routes[$i]))
                 continue;
 
-            // Save the matches
-            Logger::log('Route matched: '.$route);
-            $this->matches = $matches;
-            $this->route = $route;
-
-            // Call callable if routeConfig is callable, so routeConfig can be replaced
-            // This is an example of 'Dynamic Rewrite'
-            // e.g: '.*$' => callable
-            if (is_callable($routeConfig))
-                $routeConfig = call_user_func_array($routeConfig, [$matches]);
-
-            // If routeConfig is an array, multiple things might be at hand
-            if (is_array($routeConfig))
+            foreach ($this->routes[$i] as $route => $routeConfig)
             {
-                // Replace defaultCallable if a custom callable is provided
-                // This is an example of 'Custom Callable'
-                // e.g: '.*$' => ['callable' => [$object, 'method']]
-                if (isset($routeConfig['callable']) && is_callable($routeConfig['callable']))
-                    $this->callable = $routeConfig['callable'];
+                // Match the path against the routes
+                if (!preg_match('#^'.$route.'$#', $path, $matches))
+                    continue;
 
-                // If the route provides a configuration, use that
-                // This is an example of 'Static Rewrite'
-                // e.g: '.*$' => ['viewName' => 'custom', 'viewType' => 'cli', 'function' => 'index']
-                else
-                    $this->matches = array_merge($this->matches, $routeConfig);
+                // Save the matches
+                Logger::log("Route matched: '" . $route . "' with " . Priority::getPriority($i));
+                $this->matches = $matches;
+                $this->route = $route;
+                $this->callable = null;
+
+                // Call callable if routeConfig is callable, so routeConfig can be replaced
+                // This is an example of 'Dynamic Rewrite'
+                // e.g: '.*$' => callable
+                if (is_callable($routeConfig))
+                    $routeConfig = call_user_func_array($routeConfig, [$matches]);
+
+                // If routeConfig is an array, multiple things might be at hand
+                if (is_array($routeConfig))
+                {
+                    // Replace defaultCallable if a custom callable is provided
+                    // This is an example of 'Custom Callable'
+                    // e.g: '.*$' => ['callable' => [$object, 'method']]
+                    if (isset($routeConfig['callable']) && is_callable($routeConfig['callable']))
+                        $this->callable = $routeConfig['callable'];
+
+                    // If the route provides a configuration, use that
+                    // This is an example of 'Static Rewrite'
+                    // e.g: '.*$' => ['viewName' => 'custom', 'viewType' => 'cli', 'function' => 'index']
+                    else
+                        $this->matches = array_merge($this->matches, $routeConfig);
+                }
+
+                // If no custom callable is provided, use default
+                // This is an example of 'Default Callable'
+                if (is_null($this->callable))
+                    $this->callable = [$this, 'defaultCallable'];
+
+                // Attempt and load callable. If false, continue
+                $output = $this->loadCallable($this->callable, $this->matches, $route);
+                if (is_bool($output) && $output === FALSE)
+                {
+                    Logger::log('Callable not satisfied, skipping to next callable');
+                    continue;
+                }
+
+                return $output;
             }
-
-            // If no custom callable is provided, use default
-            // This is an example of 'Default Callable'
-            if (is_null($this->callable))
-                $this->callable = [$this, 'defaultCallable'];
-
-            // Attempt and load callable. If false, continue
-            $output = $this->loadCallable($this->callable, $this->matches, $route);
-            if (is_bool($output) && $output === FALSE)
-            {
-                Logger::log('Callable not satisfied, skipping to next callable');
-                continue;
-            }
-
-            return $output;
         }
 
         throw new NotFoundException("Could not load view. Router could not find matching route with satisfied callable.");
@@ -387,12 +404,13 @@ class Router
     /**
      * Returns an array with all the routes.
      *
+     * @param int $priority
      * @return array
      * @codeCoverageIgnore
      */
-    public function getRoutes(): array
+    public function getRoutes(int $priority = Priority::NORMAL): array
     {
-        return $this->routes;
+        return $this->routes[$priority];
     }
 
     /**

@@ -120,19 +120,14 @@ class RouterTest extends MVCRTestAbstract
         $testAppendRouteFunction = [function () {
         }];
         $this->router->addRoute('testRoute', $testRouteFunction);
-        $this->router->addRoute('testAppendRoute', $testAppendRouteFunction, false);
+        $this->router->addRoute('testAppendRoute', $testAppendRouteFunction, Priority::LOW);
 
         // Test if the order is correct
-        $this->assertSame(
-            ['testRoute' => $testRouteFunction, 'testAppendRoute' => $testAppendRouteFunction],
-            $this->router->getRoutes()
-        );
+        // First for Priority::NORMAL
+        $this->assertSame(['testRoute' => $testRouteFunction], $this->router->getRoutes(Priority::NORMAL));
 
-        // Test if the order is not incorrect
-        $this->assertNotSame(
-            ['testAppendRoute' => $testAppendRouteFunction, 'testRoute' => $testRouteFunction],
-            $this->router->getRoutes()
-        );
+        // Then for Priority::LOW
+        $this->assertSame(['testAppendRoute' => $testAppendRouteFunction], $this->router->getRoutes(Priority::LOW));
     }
 
     /**

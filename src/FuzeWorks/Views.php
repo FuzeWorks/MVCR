@@ -83,7 +83,7 @@ class Views
         else
             $arguments = [];
 
-        // Fire a view load event
+        // Fire a viewGetEvent
         /** @var ViewGetEvent $event */
         try {
             $event = Events::fireEvent('viewGetEvent', $viewName, $viewType, $viewPaths, $namespace, $controller, $arguments);

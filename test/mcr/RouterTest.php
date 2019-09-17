@@ -331,7 +331,7 @@ class RouterTest extends MVCRTestAbstract
             $this->assertInstanceOf('\FuzeWorks\Event\RouterLoadViewAndControllerEvent', $event);
             $this->assertEquals('TestDefaultCallable', $event->viewName);
             $this->assertEquals('test', $event->viewType);
-            $this->assertEquals('missing', $event->viewMethod);
+            $this->assertEquals([3=>['missing']], $event->viewMethods);
             $event->setCancelled(true);
         }, 'routerLoadViewAndControllerEvent');
 
@@ -363,6 +363,32 @@ class RouterTest extends MVCRTestAbstract
 
         $this->router->defaultCallable($matches, '.*$');
         $this->assertEquals($mockController, $this->router->getCurrentController());
+    }
+
+    /**
+     * @depends testDefaultCallableReplaceController
+     * @covers ::defaultCallable
+     * @covers \FuzeWorks\Event\RouterLoadViewAndControllerEvent::addMethod
+     */
+    public function testDefaultCallableAddMethod()
+    {
+        $matches = [
+            'viewName' => 'TestDefaultCallableChangeMethod',
+            'viewType' => 'test',
+            'viewMethod' => 'index'
+        ];
+
+        $this->assertNull($this->router->getCurrentController());
+        $this->assertNull($this->router->getCurrentView());
+
+        $mockController = $this->getMockBuilder('\FuzeWorks\Controller')->getMock();
+        // Create listener
+        Events::addListener(function($event, $mockController){
+            $event->overrideController($mockController);
+            $event->addMethod('altered', Priority::HIGH);
+        }, 'routerLoadViewAndControllerEvent', Priority::NORMAL, $mockController);
+
+        $this->assertEquals('Altered!', $this->router->defaultCallable($matches, '.*$'));
     }
 
     /* route() ------------------------------------------------------------ */

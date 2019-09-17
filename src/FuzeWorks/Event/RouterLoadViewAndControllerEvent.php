@@ -37,6 +37,7 @@
 namespace FuzeWorks\Event;
 use FuzeWorks\Controller;
 use FuzeWorks\Event;
+use FuzeWorks\Priority;
 
 /**
  * Event that gets fired when a view and controller are loaded.
@@ -67,9 +68,9 @@ class RouterLoadViewAndControllerEvent extends Event
     /**
      * The function that will be loaded in the view
      *
-     * @var string
+     * @var array
      */
-    public $viewMethod;
+    public $viewMethods;
 
     /**
      * The parameters that will be provided to the function in the view
@@ -92,13 +93,28 @@ class RouterLoadViewAndControllerEvent extends Event
      */
     public $controller;
 
-    public function init(string $viewName, string $viewType, string $viewMethod, string $viewParameters, string $route)
+    public function init(string $viewName, string $viewType, array $viewMethods, string $viewParameters, string $route)
     {
         $this->viewName = $viewName;
         $this->viewType = $viewType;
-        $this->viewMethod = $viewMethod;
+        $this->viewMethods = $viewMethods;
         $this->viewParameters = $viewParameters;
         $this->route = $route;
+    }
+
+    /**
+     * Add a method which should be tried upon calling the view
+     *
+     * @param string $method
+     * @param int $priority
+     */
+    public function addMethod(string $method, int $priority = Priority::NORMAL)
+    {
+        if (!isset($this->viewMethods[$priority]))
+            $this->viewMethods[$priority] = [];
+
+        if (!isset($this->viewMethods[$priority][$method]))
+            $this->viewMethods[$priority][] = $method;
     }
 
     /**

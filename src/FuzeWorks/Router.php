@@ -325,7 +325,8 @@ class Router
             $event = Events::fireEvent('routerLoadViewAndControllerEvent',
                 $viewName,
                 $viewType,
-                $viewMethod,
+                // ViewMethod is provided as a Priority::NORMAL method
+                [3 => [$viewMethod]],
                 $viewParameters,
                 $route
             );
@@ -363,7 +364,7 @@ class Router
             $event = Events::fireEvent('routerCallViewEvent',
                 $this->view,
                 $this->controller,
-                $event->viewMethod,
+                $event->viewMethods,
                 $event->viewParameters,
                 $event->route
             );
@@ -383,21 +384,27 @@ class Router
         if (isset($this->view->halt))
             throw new HaltException("Will not load view. Cancelled by 'halt' attribute in view.");
 
-        // Check if requested function or magic method exists in view
-        if (method_exists($this->view, $event->viewMethod) || method_exists($this->view, '__call'))
-        {
-            // Execute the function on the view
-            Logger::newLevel("Calling method '{$event->viewMethod}' on " . get_class($this->view) . ' with ' . get_class($this->controller));
-            $output = $this->view->{$event->viewMethod}($event->viewParameters);
-            Logger::stopLevel();
-            return $output;
-        }
-        else
-        {
-            Logger::logError("Could not load view. View does not have method '".$event->viewMethod."'");
+        // Cycle over every viewMethod until a valid one is found
+        for ($i=Priority::getHighestPriority(); $i<=Priority::getLowestPriority(); $i++) {
+            if (!isset($event->viewMethods[$i]))
+                continue;
+
+            foreach ($event->viewMethods[$i] as $method) {
+                if (method_exists($this->view, $method))
+                {
+                    // Execute this method on the view
+                    Logger::newLevel("Calling method '{$method}' on " . get_class($this->view) . ' with ' . get_class($this->controller));
+                    $output = $this->view->{$method}($event->viewParameters);
+                    Logger::stopLevel();
+                    return $output;
+                }
+            }
         }
 
-        // View could not be found
+        // Otherwise log an error
+        Logger::logError("Could not load view. View does not have any of the provided methods.");
+
+        // View could not be found.
         return false;
     }
 

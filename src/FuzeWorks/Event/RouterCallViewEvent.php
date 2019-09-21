@@ -35,36 +35,27 @@
  */
 
 namespace FuzeWorks\Event;
+
 use FuzeWorks\Controller;
 use FuzeWorks\Event;
 use FuzeWorks\Priority;
+use FuzeWorks\View;
 
 /**
- * Event that gets fired when a view and controller are loaded.
+ * Event that gets fired when a view is about to be called by the defaultCallable() in the Router.
  *
- * Use this to cancel the loading of a combination, or change the details of what is loaded.
+ * Use this to cancel the calling of a view method.
  *
  * Currently only used by Router::defaultCallable();
+ *
+ * This event is currently used in the WebComponent project. It allows the component to stop loading when
+ * a CSRFException is thrown, and the view has no method of handling this request
  *
  * @author    Abel Hoogeveen <abel@techfuze.net>
  * @copyright Copyright (c) 2013 - 2019, TechFuze. (http://techfuze.net)
  */
-class RouterLoadViewAndControllerEvent extends Event
+class RouterCallViewEvent extends Event
 {
-    /**
-     * The name of the view
-     *
-     * @var string
-     */
-    public $viewName;
-
-    /**
-     * The type of view to be loaded
-     *
-     * @var string
-     */
-    public $viewType;
-
     /**
      * The function that will be loaded in the view
      *
@@ -87,16 +78,23 @@ class RouterLoadViewAndControllerEvent extends Event
     public $route;
 
     /**
-     * A controller to be injected.
+     * The view the method will be called on
      *
-     * @var Controller|null
+     * @var View
+     */
+    public $view;
+
+    /**
+     * The controller that's associated with this View
+     *
+     * @var Controller
      */
     public $controller;
 
-    public function init(string $viewName, string $viewType, array $viewMethods, string $viewParameters, string $route)
+    public function init(View $view, Controller $controller, array $viewMethods, string $viewParameters, string $route)
     {
-        $this->viewName = $viewName;
-        $this->viewType = $viewType;
+        $this->view = $view;
+        $this->controller = $controller;
         $this->viewMethods = $viewMethods;
         $this->viewParameters = $viewParameters;
         $this->route = $route;
@@ -115,15 +113,5 @@ class RouterLoadViewAndControllerEvent extends Event
 
         if (!isset($this->viewMethods[$priority][$method]))
             $this->viewMethods[$priority][] = $method;
-    }
-
-    /**
-     * Override the controller to be provided to the view.
-     *
-     * @param Controller $controller
-     */
-    public function overrideController(Controller $controller)
-    {
-        $this->controller = $controller;
     }
 }

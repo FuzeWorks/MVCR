@@ -36,7 +36,8 @@
 
 namespace FuzeWorks;
 
-
+use FuzeWorks\Event\RouterCallViewEvent;
+use FuzeWorks\Event\RouterLoadCallableEvent;
 use FuzeWorks\Event\RouterLoadViewAndControllerEvent;
 use FuzeWorks\Exception\ConfigException;
 use FuzeWorks\Exception\ControllerException;
@@ -155,7 +156,14 @@ class Router
         }
     }
 
-    public function addRoute(string $route, $routeConfig = null, bool $prepend = true)
+    /**
+     * Add a route to the Router
+     *
+     * @param string $route
+     * @param null $routeConfig
+     * @param int $priority
+     */
+    public function addRoute(string $route, $routeConfig = null, int $priority = Priority::NORMAL)
     {
         // Set defaultCallable if no value provided
         if (is_null($routeConfig))
@@ -164,23 +172,27 @@ class Router
         // Convert wildcards to Regex
         $route = str_replace([':any',':num'], ['[^/]+', '[0-9]+'], $route);
 
-        if ($prepend)
-            $this->routes = [$route => $routeConfig] + $this->routes;
-        else
-            $this->routes[$route] = $routeConfig;
+        if (!isset($this->routes[$priority]))
+            $this->routes[$priority] = [];
 
-        Logger::log('Route added at '.($prepend ? 'top' : 'bottom').': "'.$route.'"');
+        if (!isset($this->routes[$priority][$route]))
+            $this->routes[$priority][$route] = $routeConfig;
+
+        Logger::log('Route added with ' . Priority::getPriority($priority) . ": '" . $route."'");
     }
 
     /**
      * Removes a route from the array based on the given route.
      *
      * @param $route string The route to remove
+     * @param int $priority
      */
-    public function removeRoute(string $route)
+    public function removeRoute(string $route, int $priority = Priority::NORMAL)
     {
-        unset($this->routes[$route]);
+        if (!isset($this->routes[$priority][$route]))
+            return;
 
+        unset($this->routes[$priority][$route]);
         Logger::log('Route removed: '.$route);
     }
 
@@ -188,56 +200,68 @@ class Router
      * @param string $path
      * @return mixed
      * @throws NotFoundException
+     * @throws RouterException
+     * @throws HaltException
      */
     public function route(string $path)
     {
-        // Check all the provided custom paths
-        foreach ($this->routes as $route => $routeConfig)
-        {
-            // Match the path against the routes
-            if (!preg_match('#^'.$route.'$#', $path, $matches))
+        // Check all the provided custom paths, ordered by priority
+        for ($i=Priority::getHighestPriority(); $i<=Priority::getLowestPriority(); $i++) {
+            if (!isset($this->routes[$i]))
                 continue;
 
-            // Save the matches
-            Logger::log('Route matched: '.$route);
-            $this->matches = $matches;
-            $this->route = $route;
-
-            // Call callable if routeConfig is callable, so routeConfig can be replaced
-            // e.g: '.*$' => callable
-            if (is_callable($routeConfig))
-                $routeConfig = call_user_func_array($routeConfig, [$matches]);
-
-            // If routeConfig is an array, multiple things might be at hand
-            if (is_array($routeConfig))
+            foreach ($this->routes[$i] as $route => $routeConfig)
             {
-                // Replace defaultCallable if a custom callable is provided
-                // e.g: '.*$' => ['callable' => [$object, 'method']]
-                if (isset($routeConfig['callable']) && is_callable($routeConfig['callable']))
-                    $this->callable = $routeConfig['callable'];
+                // Match the path against the routes
+                if (!preg_match('#^'.$route.'$#', $path, $matches))
+                    continue;
 
-                // If the route provides a configuration, use that
-                // e.g: '.*$' => ['viewName' => 'custom', 'viewType' => 'cli', 'function' => 'index']
-                else
-                    $this->matches = array_merge($this->matches, $routeConfig);
+                // Save the matches
+                Logger::log("Route matched: '" . $route . "' with " . Priority::getPriority($i));
+                $this->matches = $matches;
+                $this->route = $route;
+                $this->callable = null;
+
+                // Call callable if routeConfig is callable, so routeConfig can be replaced
+                // This is an example of 'Dynamic Rewrite'
+                // e.g: '.*$' => callable
+                if (is_callable($routeConfig))
+                    $routeConfig = call_user_func_array($routeConfig, [$matches]);
+
+                // If routeConfig is an array, multiple things might be at hand
+                if (is_array($routeConfig))
+                {
+                    // Replace defaultCallable if a custom callable is provided
+                    // This is an example of 'Custom Callable'
+                    // e.g: '.*$' => ['callable' => [$object, 'method']]
+                    if (isset($routeConfig['callable']) && is_callable($routeConfig['callable']))
+                        $this->callable = $routeConfig['callable'];
+
+                    // If the route provides a configuration, use that
+                    // This is an example of 'Static Rewrite'
+                    // e.g: '.*$' => ['viewName' => 'custom', 'viewType' => 'cli', 'function' => 'index']
+                    else
+                        $this->matches = array_merge($this->matches, $routeConfig);
+                }
+
+                // If no custom callable is provided, use default
+                // This is an example of 'Default Callable'
+                if (is_null($this->callable))
+                    $this->callable = [$this, 'defaultCallable'];
+
+                // Attempt and load callable. If false, continue
+                $output = $this->loadCallable($this->callable, $this->matches, $route);
+                if (is_bool($output) && $output === FALSE)
+                {
+                    Logger::log('Callable not satisfied, skipping to next callable');
+                    continue;
+                }
+
+                return $output;
             }
-
-            // If no custom callable is provided, use default
-            if (is_null($this->callable))
-                $this->callable = [$this, 'defaultCallable'];
-
-            // Attempt and load callable. If false, continue
-            $output = $this->loadCallable($this->callable, $this->matches, $route);
-            if (is_bool($output) && $output === FALSE)
-            {
-                Logger::log('Callable not satisfied, skipping to next callable');
-                continue;
-            }
-
-            return $output;
         }
 
-        throw new NotFoundException("Could not load view. Router could not find matching route.");
+        throw new NotFoundException("Could not load view. Router could not find matching route with satisfied callable.");
     }
 
     /**
@@ -245,6 +269,8 @@ class Router
      * @param array $matches
      * @param string $route
      * @return mixed
+     * @throws RouterException
+     * @throws HaltException
      */
     protected function loadCallable(callable $callable, array $matches, string $route)
     {
@@ -254,10 +280,26 @@ class Router
             if (!is_int($key))
                 Logger::log($key.': '.var_export($value, true).'');
         }
-        Logger::stopLevel();
+
+        try {
+            /** @var RouterLoadCallableEvent $event */
+            $event = Events::fireEvent('routerLoadCallableEvent',
+                $callable,
+                $matches,
+                $route
+            );
+        } catch (EventException $e) {
+            throw new RouterException("Could not load callable. routerLoadCallableEvent threw exception: '".$e->getMessage()."'");
+        }
+
+        // Halt if cancelled
+        if ($event->isCancelled())
+            throw new HaltException("Will not load callable. Cancelled by routerLoadCallableEvent.");
 
         // Invoke callable
-        return call_user_func_array($callable, [$matches, $route]);
+        $output = call_user_func_array($event->callable, [$event->matches, $event->route]);
+        Logger::stopLevel();
+        return $output;
     }
 
     /**
@@ -273,21 +315,18 @@ class Router
         Logger::log('defaultCallable called');
 
         // Prepare variables
-        $viewName = isset($matches['viewName']) ? $matches['viewName'] : null;
-        $viewType = isset($matches['viewType']) ? $matches['viewType'] : $this->config->routing->default_viewType;
-        $viewMethod = isset($matches['viewMethod']) ? $matches['viewMethod'] : $this->config->routing->default_viewMethod;
-        $viewParameters = isset($matches['viewParameters']) ? $matches['viewParameters'] : '';
-
-        // If nothing is provided, cancel loading
-        if (is_null($viewName))
-            return false;
+        $viewName = !empty($matches['viewName']) ? $matches['viewName'] : $this->config->routing->default_view;
+        $viewType = !empty($matches['viewType']) ? $matches['viewType'] : $this->config->routing->default_viewType;
+        $viewMethod = !empty($matches['viewMethod']) ? $matches['viewMethod'] : $this->config->routing->default_viewMethod;
+        $viewParameters = !empty($matches['viewParameters']) ? $matches['viewParameters'] : '';
 
         try {
             /** @var RouterLoadViewAndControllerEvent $event */
             $event = Events::fireEvent('routerLoadViewAndControllerEvent',
                 $viewName,
                 $viewType,
-                $viewMethod,
+                // ViewMethod is provided as a Priority::NORMAL method
+                [3 => [$viewMethod]],
                 $viewParameters,
                 $route
             );
@@ -305,6 +344,7 @@ class Router
         } catch (ControllerException $e) {
             throw new RouterException("Could not load view. Controllers::get threw ControllerException: '".$e->getMessage()."'");
         } catch (NotFoundException $e) {
+            Logger::logError("Could not load view. Controller does not exist.");
             return false;
         }
 
@@ -314,44 +354,70 @@ class Router
         } catch (ViewException $e) {
             throw new RouterException("Could not load view. Views::get threw ViewException: '".$e->getMessage()."'");
         } catch (NotFoundException $e) {
+            Logger::logError("Could not load view. View does not exist.");
             return false;
         }
+
+        // Fire routerCallViewEvent
+        try {
+            /** @var RouterCallViewEvent $event */
+            $event = Events::fireEvent('routerCallViewEvent',
+                $this->view,
+                $this->controller,
+                $event->viewMethods,
+                $event->viewParameters,
+                $event->route
+            );
+
+            // Reset vars
+            $this->view = $event->view;
+            $this->controller = $event->controller;
+        } catch (EventException $e) {
+            throw new RouterException("Could not load view. routerCallViewEvent threw exception: '".$e->getMessage()."'");
+        }
+
+        // Cancel if requested to do so
+        if ($event->isCancelled())
+            throw new HaltException("Will not load view. Cancelled by routerCallViewEvent");
 
         // If the view does not want a function to be loaded, provide a halt parameter
         if (isset($this->view->halt))
             throw new HaltException("Will not load view. Cancelled by 'halt' attribute in view.");
 
-        // Check if requested function or magic method exists in view
-        if (method_exists($this->view, $event->viewMethod) || method_exists($this->view, '__call'))
-        {
-            // Run viewCallMethodEvent.
-            try {
-                $methodEvent = Events::fireEvent('viewCallMethodEvent');
-            } catch (EventException $e) {
-                throw new RouterException("Could not load view. viewCallMethodEvent threw exception: '".$e->getMessage()."'");
+        // Cycle over every viewMethod until a valid one is found
+        for ($i=Priority::getHighestPriority(); $i<=Priority::getLowestPriority(); $i++) {
+            if (!isset($event->viewMethods[$i]))
+                continue;
+
+            foreach ($event->viewMethods[$i] as $method) {
+                if (method_exists($this->view, $method))
+                {
+                    // Execute this method on the view
+                    Logger::newLevel("Calling method '{$method}' on " . get_class($this->view) . ' with ' . get_class($this->controller));
+                    $output = $this->view->{$method}($event->viewParameters);
+                    Logger::stopLevel();
+                    return $output;
+                }
             }
-
-            // If cancelled, halt
-            if ($methodEvent->isCancelled())
-                throw new HaltException("Will not load view. Cancelled by viewCallMethodEvent");
-
-            // Execute the function on the view
-            return $this->view->{$event->viewMethod}($event->viewParameters);
         }
 
-        // View could not be found
+        // Otherwise log an error
+        Logger::logError("Could not load view. View does not have any of the provided methods.");
+
+        // View could not be found.
         return false;
     }
 
     /**
      * Returns an array with all the routes.
      *
+     * @param int $priority
      * @return array
      * @codeCoverageIgnore
      */
-    public function getRoutes(): array
+    public function getRoutes(int $priority = Priority::NORMAL): array
     {
-        return $this->routes;
+        return $this->routes[$priority];
     }
 
     /**

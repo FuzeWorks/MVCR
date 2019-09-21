@@ -35,7 +35,9 @@
  */
 
 use FuzeWorks\Config;
+use FuzeWorks\Events;
 use FuzeWorks\Factory;
+use FuzeWorks\Priority;
 use FuzeWorks\Router;
 
 /**
@@ -118,19 +120,14 @@ class RouterTest extends MVCRTestAbstract
         $testAppendRouteFunction = [function () {
         }];
         $this->router->addRoute('testRoute', $testRouteFunction);
-        $this->router->addRoute('testAppendRoute', $testAppendRouteFunction, false);
+        $this->router->addRoute('testAppendRoute', $testAppendRouteFunction, Priority::LOW);
 
         // Test if the order is correct
-        $this->assertSame(
-            ['testRoute' => $testRouteFunction, 'testAppendRoute' => $testAppendRouteFunction],
-            $this->router->getRoutes()
-        );
+        // First for Priority::NORMAL
+        $this->assertSame(['testRoute' => $testRouteFunction], $this->router->getRoutes(Priority::NORMAL));
 
-        // Test if the order is not incorrect
-        $this->assertNotSame(
-            ['testAppendRoute' => $testAppendRouteFunction, 'testRoute' => $testRouteFunction],
-            $this->router->getRoutes()
-        );
+        // Then for Priority::LOW
+        $this->assertSame(['testAppendRoute' => $testAppendRouteFunction], $this->router->getRoutes(Priority::LOW));
     }
 
     /**
@@ -279,7 +276,7 @@ class RouterTest extends MVCRTestAbstract
      * @covers ::defaultCallable
      * @expectedException \FuzeWorks\Exception\HaltException
      */
-    public function testDefaultCallableHalt()
+    public function testDefaultCallableHaltByView()
     {
         $matches = [
             'viewName' => 'TestDefaultCallableHalt',
@@ -312,8 +309,242 @@ class RouterTest extends MVCRTestAbstract
         $this->assertNull($this->router->getCurrentView());
     }
 
+    /**
+     * @depends testDefaultCallable
+     * @covers ::defaultCallable
+     * @covers \FuzeWorks\Event\RouterLoadViewAndControllerEvent::init
+     * @expectedException \FuzeWorks\Exception\HaltException
+     */
+    public function testDefaultCallableHaltByEvent()
+    {
+        $matches = [
+            'viewName' => 'TestDefaultCallable',
+            'viewType' => 'test',
+            'viewMethod' => 'missing'
+        ];
+
+        $this->assertNull($this->router->getCurrentController());
+        $this->assertNull($this->router->getCurrentView());
+
+        // Create listener
+        Events::addListener(function($event){
+            $this->assertInstanceOf('\FuzeWorks\Event\RouterLoadViewAndControllerEvent', $event);
+            $this->assertEquals('TestDefaultCallable', $event->viewName);
+            $this->assertEquals('test', $event->viewType);
+            $this->assertEquals([3=>['missing']], $event->viewMethods);
+            $event->setCancelled(true);
+        }, 'routerLoadViewAndControllerEvent');
+
+        $this->router->defaultCallable($matches, '.*$');
+    }
+
+    /**
+     * @depends testDefaultCallableHaltByEvent
+     * @covers ::defaultCallable
+     * @covers \FuzeWorks\Event\RouterLoadViewAndControllerEvent::overrideController
+     */
+    public function testDefaultCallableReplaceController()
+    {
+        $matches = [
+            'viewName' => 'TestDefaultCallable',
+            'viewType' => 'test',
+            'viewMethod' => 'missing'
+        ];
+
+        $this->assertNull($this->router->getCurrentController());
+        $this->assertNull($this->router->getCurrentView());
+
+        $mockController = $this->getMockBuilder('\FuzeWorks\Controller')->getMock();
+
+        // Create listener
+        Events::addListener(function($event, $mockController){
+            $event->overrideController($mockController);
+        }, 'routerLoadViewAndControllerEvent', Priority::NORMAL, $mockController);
+
+        $this->router->defaultCallable($matches, '.*$');
+        $this->assertEquals($mockController, $this->router->getCurrentController());
+    }
+
+    /**
+     * @depends testDefaultCallableReplaceController
+     * @covers ::defaultCallable
+     * @covers \FuzeWorks\Event\RouterLoadViewAndControllerEvent::addMethod
+     */
+    public function testDefaultCallableAddMethod()
+    {
+        $matches = [
+            'viewName' => 'TestDefaultCallableChangeMethod',
+            'viewType' => 'test',
+            'viewMethod' => 'index'
+        ];
+
+        $this->assertNull($this->router->getCurrentController());
+        $this->assertNull($this->router->getCurrentView());
+
+        $mockController = $this->getMockBuilder('\FuzeWorks\Controller')->getMock();
+        // Create listener
+        Events::addListener(function($event, $mockController){
+            $event->overrideController($mockController);
+            $event->addMethod('altered', Priority::HIGH);
+        }, 'routerLoadViewAndControllerEvent', Priority::NORMAL, $mockController);
+
+        $this->assertEquals('Altered!', $this->router->defaultCallable($matches, '.*$'));
+    }
+
     /* route() ------------------------------------------------------------ */
 
+    /**
+     * @depends testDefaultCallable
+     * @covers ::route
+     * @covers ::loadCallable
+     */
+    public function testRoute()
+    {
+        // Add route first
+        $this->router->addRoute('(?P<viewName>.*?)(|\/(?P<viewMethod>.*?)(|\/(?P<viewParameters>.*?)))(|\.(?P<viewType>.*?))');
 
+        // Create mock view and controller
+        $mockController = $this->getMockBuilder('\FuzeWorks\Controller')->getMock();
+        $mockView = $this->getMockBuilder('\FuzeWorks\View')->setMethods(['testMethod'])->getMock();
+        class_alias(get_class($mockController), '\Application\Controller\TestRouteController');
+        class_alias(get_class($mockView), '\Application\View\TestRouteTestView');
+
+        // Attempt to route
+        $this->assertnull($this->router->route('testRoute/testMethod/testParameters.test'));
+        $this->assertInstanceOf('\Application\Controller\TestRouteController', $this->router->getCurrentController());
+        $this->assertInstanceOf('\Application\View\TestRouteTestView', $this->router->getCurrentView());
+    }
+
+    /**
+     * @depends testRoute
+     * @covers ::route
+     * @expectedException \FuzeWorks\Exception\NotFoundException
+     */
+    public function testRouteNotFound()
+    {
+        $this->router->route('NotFound');
+    }
+
+    /**
+     * @depends testRouteNotFound
+     * @covers ::route
+     * @expectedException \FuzeWorks\Exception\NotFoundException
+     */
+    public function testRouteNotMatched()
+    {
+        $this->router->addRoute('NotMatched');
+        $this->router->route('NotFound');
+    }
+
+    /**
+     * @depends testRoute
+     * @covers ::route
+     * @covers ::loadCallable
+     */
+    public function testRouteStaticRewrite()
+    {
+        // Add route first
+        $this->router->addRoute(
+            'staticRewrite',
+            [
+                'viewName' => 'TestStaticRewrite',
+                'viewMethod' => 'someMethod',
+                'viewType' => 'static'
+            ]
+        );
+
+        // Create mock view and controller
+        $mockController = $this->getMockBuilder('\FuzeWorks\Controller')->getMock();
+        $mockView = $this->getMockBuilder('\FuzeWorks\View')->setMethods(['someMethod'])->getMock();
+        class_alias(get_class($mockController), '\Application\Controller\TestStaticRewriteController');
+        class_alias(get_class($mockView), '\Application\View\TestStaticRewriteStaticView');
+
+        // Attempt to route
+        $this->assertnull($this->router->route('staticRewrite'));
+        $this->assertInstanceOf('\Application\Controller\TestStaticRewriteController', $this->router->getCurrentController());
+        $this->assertInstanceOf('\Application\View\TestStaticRewriteStaticView', $this->router->getCurrentView());
+    }
+
+    /**
+     * @depends testRouteStaticRewrite
+     * @covers ::route
+     * @covers ::loadCallable
+     */
+    public function testRouteDynamicRewrite()
+    {
+        // Add route first
+        $this->router->addRoute(
+            'dynamicRewrite',
+            function($matches){
+                $this->assertEquals([0=>'dynamicRewrite'], $matches);
+                return [
+                    'viewName' => 'TestDynamicRewrite',
+                    'viewMethod' => 'someMethod',
+                    'viewType' => 'static'
+                ];
+            }
+        );
+
+        // Create mock view and controller
+        $mockController = $this->getMockBuilder('\FuzeWorks\Controller')->getMock();
+        $mockView = $this->getMockBuilder('\FuzeWorks\View')->setMethods(['someMethod'])->getMock();
+        class_alias(get_class($mockController), '\Application\Controller\TestDynamicRewriteController');
+        class_alias(get_class($mockView), '\Application\View\TestDynamicRewriteStaticView');
+
+        // Attempt to route
+        $this->assertNull($this->router->route('dynamicRewrite'));
+        $this->assertInstanceOf('\Application\Controller\TestDynamicRewriteController', $this->router->getCurrentController());
+        $this->assertInstanceOf('\Application\View\TestDynamicRewriteStaticView', $this->router->getCurrentView());
+    }
+
+    /**
+     * @depends testRouteStaticRewrite
+     * @covers ::route
+     * @covers ::loadCallable
+     */
+    public function testRouteCustomCallable()
+    {
+        // Create custom callable
+        $callable = function(array $matches, string $route){
+            $this->assertEquals('customCallable', $route);
+            $this->assertEquals([0=>'customCallable'], $matches);
+        };
+
+        // Add route
+        $this->router->addRoute(
+            'customCallable',
+            [
+                'callable' => $callable
+            ]
+        );
+
+        $this->assertNull($this->router->route('customCallable'));
+    }
+
+    /**
+     * @depends testRouteStaticRewrite
+     * @covers ::route
+     * @covers ::loadCallable
+     * @expectedException \FuzeWorks\Exception\NotFoundException
+     */
+    public function testRouteUnsatisfiedCallable()
+    {
+        // Create custom callable
+        $callable = function(array $matches, string $route){
+            $this->assertEquals('unsatisfiedCallable', $route);
+            $this->assertEquals([0=>'unsatisfiedCallable'], $matches);
+            return false;
+        };
+
+        // Add route
+        $this->router->addRoute(
+            'unsatisfiedCallable',
+            [
+                'callable' => $callable
+            ]
+        );
+
+        $this->assertNull($this->router->route('unsatisfiedCallable'));
+    }
 
 }

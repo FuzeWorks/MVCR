@@ -40,13 +40,33 @@ namespace FuzeWorks;
 /**
  * Abstract class View.
  *
- * Extends all views to use the Factory.
+ * Extends all views to use useful classes
  *
  * @author    Abel Hoogeveen <abel@techfuze.net>
  * @copyright Copyright (c) 2013 - 2019, TechFuze. (http://techfuze.net)
  */
-abstract class View extends Factory
+abstract class View
 {
+
+    /**
+     * @var Plugins
+     */
+    protected $plugins;
+
+    /**
+     * @var Libraries
+     */
+    protected $libraries;
+
+    /**
+     * @var Helpers
+     */
+    protected $helpers;
+
+    /**
+     * @var Config
+     */
+    protected $config;
 
     /**
      * The controller associated with this view
@@ -63,6 +83,14 @@ abstract class View extends Factory
     public function setController(Controller $controller)
     {
         $this->controller = $controller;
+    }
+
+    public function __construct()
+    {
+        $this->plugins = Factory::getInstance()->plugins;
+        $this->libraries = Factory::getInstance()->libraries;
+        $this->helpers = Factory::getInstance()->helpers;
+        $this->config = Factory::getInstance()->config;
     }
 
 }

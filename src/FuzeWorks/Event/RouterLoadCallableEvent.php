@@ -34,45 +34,49 @@
  * @version Version 1.2.0
  */
 
-namespace FuzeWorks;
+namespace FuzeWorks\Event;
 
+use FuzeWorks\Event;
 
 /**
- * Abstract class Model.
+ * Event that gets fired when a callable is to be loaded by the Router class
  *
- * Extends all models to use useful classes
+ * Use this to cancel the modify the loading of a custom callable or the defaultCallable
+ *
+ * Currently only used by Router::loadCallable();
  *
  * @author    Abel Hoogeveen <abel@techfuze.net>
  * @copyright Copyright (c) 2013 - 2019, TechFuze. (http://techfuze.net)
  */
-abstract class Model
+class RouterLoadCallableEvent extends Event
 {
-    /**
-     * @var Plugins
-     */
-    protected $plugins;
 
     /**
-     * @var Libraries
+     * The callable to be loaded
+     *
+     * @var callable
      */
-    protected $libraries;
+    public $callable;
 
     /**
-     * @var Helpers
+     * The matches with which the callable is loaded
+     *
+     * @var array
      */
-    protected $helpers;
+    public $matches;
 
     /**
-     * @var Config
+     * The route which resulted in this callable being loaded
+     *
+     * @var string
      */
-    protected $config;
+    public $route;
 
-    public function __construct()
+    public function init(callable $callable, array $matches, string $route)
     {
-        $this->plugins = Factory::getInstance()->plugins;
-        $this->libraries = Factory::getInstance()->libraries;
-        $this->helpers = Factory::getInstance()->helpers;
-        $this->config = Factory::getInstance()->config;
+        $this->callable = $callable;
+        $this->matches = $matches;
+        $this->route = $route;
     }
 
 }

@@ -68,7 +68,9 @@ release:
   only:
   - master
   script:
-  - vendor/bin/phpunit -c test/phpunit.xml --coverage-text
+    - pecl install xdebug
+    - docker-php-ext-enable xdebug
+    - vendor/bin/phpunit -c test/phpunit.xml --coverage-text
   artifacts:
     name: "${CI_BUILD_NAME}_${CI_BUILD_REF_NAME}"
     paths:

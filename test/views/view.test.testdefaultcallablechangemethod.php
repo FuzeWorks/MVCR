@@ -1,6 +1,6 @@
 <?php
 /**
- * FuzeWorks Framework MVCR Component.
+ * FuzeWorks CLIComponent.
  *
  * The FuzeWorks PHP FrameWork
  *
@@ -34,45 +34,19 @@
  * @version Version 1.2.0
  */
 
-namespace FuzeWorks;
+namespace Application\View;
+use FuzeWorks\View;
 
-
-/**
- * Abstract class Model.
- *
- * Extends all models to use useful classes
- *
- * @author    Abel Hoogeveen <abel@techfuze.net>
- * @copyright Copyright (c) 2013 - 2019, TechFuze. (http://techfuze.net)
- */
-abstract class Model
+class TestDefaultCallableChangeMethodTestView extends View
 {
-    /**
-     * @var Plugins
-     */
-    protected $plugins;
 
-    /**
-     * @var Libraries
-     */
-    protected $libraries;
-
-    /**
-     * @var Helpers
-     */
-    protected $helpers;
-
-    /**
-     * @var Config
-     */
-    protected $config;
-
-    public function __construct()
+    public function index()
     {
-        $this->plugins = Factory::getInstance()->plugins;
-        $this->libraries = Factory::getInstance()->libraries;
-        $this->helpers = Factory::getInstance()->helpers;
-        $this->config = Factory::getInstance()->config;
+        return "Not altered!";
     }
 
+    public function altered()
+    {
+        return "Altered!";
+    }
 }
